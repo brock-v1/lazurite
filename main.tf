@@ -6,24 +6,111 @@ terraform {
     }
   }
 }
-
 provider "azurerm" {
   features {}
 }
 
-resource "azurerm_resource_group" "RG" {
-  name     = "RG"
+#Create Resource Group
+resource "azurerm_resource_group" "rg" {
+  name     = "rg"
   location = "East US"
 }
 
-resource "azurerm_virtual_network" "VNET" {
-  name                = "VNET"
-  resource_group_name = azurerm_resource_group.RG.name
-  location            = azurerm_resource_group.RG.location
-  address_space       = ["10.0.0.0/16"]
+#Create 2 VNETs with Peering
+resource "azurerm_virtual_network" "vnet1" {
+  name                = "vnet1"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  address_space       = ["10.1.0.0/16"]
+}
+resource "azurerm_virtual_network" "vnet2" {
+  name                = "vnet2"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  address_space       = ["10.2.0.0/16"]
+}
+resource "azurerm_virtual_network_peering" "peer1to2" {
+  name                      = "peer1to2"
+  resource_group_name       = azurerm_resource_group.rg.name
+  virtual_network_name      = azurerm_virtual_network.vnet1.name
+  remote_virtual_network_id = azurerm_virtual_network.vnet2.id
+}
+resource "azurerm_virtual_network_peering" "peer2to1" {
+  name                      = "peer2to1"
+  resource_group_name       = azurerm_resource_group.rg.name
+  virtual_network_name      = azurerm_virtual_network.vnet2.name
+  remote_virtual_network_id = azurerm_virtual_network.vnet1.id
+}
 
-  subnet {
-    name           = "subnet1"
-    address_prefix = "10.0.0.0/24"
+#Create Network Watcher for East US
+resource "azurerm_network_watcher" "networkwatcher_eastus" {
+  name                = "networkwatcher_eastus"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+}
+
+#Create 2 Subnets, 1 per VNET
+resource "azurerm_subnet" "vnet1-subnet1" {
+  name                 = "vnet1-subnet1"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet1.name
+  address_prefixes     = ["10.1.1.0/24"]
+}
+resource "azurerm_subnet" "vnet2-subnet1" {
+  name                 = "vnet2-subnet1"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet2.name
+  address_prefixes     = ["10.2.1.0/24"]
+}
+
+#Create default NSG and associate it to both Subnets
+resource "azurerm_network_security_group" "nsg" {
+  name                = "nsg"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+}
+resource "azurerm_subnet_network_security_group_association" "nsgtovnet1-subnet1" {
+  subnet_id                 = azurerm_subnet.vnet1-subnet1.id
+  network_security_group_id = azurerm_network_security_group.nsg.id
+}
+resource "azurerm_subnet_network_security_group_association" "nsgtovnet2-subnet1" {
+  subnet_id                 = azurerm_subnet.vnet2-subnet1.id
+  network_security_group_id = azurerm_network_security_group.nsg.id
+}
+
+#Create Storage Account, Log Analytics Workspace and Flow Logging
+resource "azurerm_storage_account" "salazurite123" {
+  name                      = "salazurite123"
+  resource_group_name       = azurerm_resource_group.rg.name
+  location                  = azurerm_resource_group.rg.location
+  account_tier              = "Standard"
+  account_kind              = "StorageV2"
+  account_replication_type  = "LRS"
+  enable_https_traffic_only = "true"
+}
+resource "azurerm_log_analytics_workspace" "law1" {
+  name                = "law1"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+}
+resource "azurerm_network_watcher_flow_log" "nsgflowlog" {
+  network_watcher_name      = azurerm_network_watcher.networkwatcher_eastus.name
+  resource_group_name       = azurerm_resource_group.rg.name
+  name                      = "nsgflowlog"
+  network_security_group_id = azurerm_network_security_group.nsg.id
+  storage_account_id        = azurerm_storage_account.salazurite123.id
+  enabled                   = true
+  retention_policy {
+    enabled = true
+    days    = 0
+  }
+  traffic_analytics {
+    enabled               = true
+    workspace_id          = azurerm_log_analytics_workspace.law1.workspace_id
+    workspace_region      = azurerm_log_analytics_workspace.law1.location
+    workspace_resource_id = azurerm_log_analytics_workspace.law1.id
+    interval_in_minutes   = 10
   }
 }
