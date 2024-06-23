@@ -265,14 +265,13 @@ resource "azurerm_virtual_machine_extension" "vm2-webserverinstall" {
 
 # TO DO LIST:
 
-# Need to add the below for Hello World page
-# Remove-Item C:\inetpub\wwwroot\iisstart.htm"
-# Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $("Hello World from "+$env:computername)"
-
-# Need to write PowerShell script or something that automatically adds an NSG rule for my public IP allowing 80/3389
-
 # Need to randomize resource names
 
 # Need to fix Network Watcher name
+
+#Add Bastion
+#Add Load Balancer
+#Add Private Endpoint
+#Add DNS
 
 ##########################################################################################################################
