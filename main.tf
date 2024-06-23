@@ -273,6 +273,6 @@ resource "azurerm_virtual_machine_extension" "vm2-webserverinstall" {
 
 # Need to randomize resource names
 
-# Need to create variables.tf for things like region, etc.
+# Need to fix Network Watcher name
 
 ##########################################################################################################################
