@@ -1,4 +1,5 @@
 
+##########################################################################################################################
 
 #Create a random string for naming resources
 resource "random_string" "unique" {
@@ -10,11 +11,15 @@ resource "random_string" "unique" {
   upper       = false
 }
 
+##########################################################################################################################
+
 #Create Resource Group
 resource "azurerm_resource_group" "rg" {
   name     = "rg${local.location_short}${random_string.unique.result}"
   location = var.location
 }
+
+##########################################################################################################################
 
 #Create 2 VNETs with Peering
 resource "azurerm_virtual_network" "vnet1" {
@@ -42,7 +47,9 @@ resource "azurerm_virtual_network_peering" "peer2to1" {
   remote_virtual_network_id = azurerm_virtual_network.vnet1.id
 }
 
-#Create Network Watcher for East US
+##########################################################################################################################
+
+#Create Network Watcher
 resource "azurerm_network_watcher" "networkwatcher" {
   name                = "networkwatcher_${local.location_short}${random_string.unique.result}"
   resource_group_name = azurerm_resource_group.rg.name
@@ -62,6 +69,8 @@ resource "azurerm_subnet" "vnet2-subnet1" {
   virtual_network_name = azurerm_virtual_network.vnet2.name
   address_prefixes     = ["10.2.1.0/24"]
 }
+
+##########################################################################################################################
 
 #Create default NSG and associate it to both Subnets
 resource "azurerm_network_security_group" "nsg" {
@@ -90,6 +99,8 @@ resource "azurerm_subnet_network_security_group_association" "nsgtovnet2-subnet1
   subnet_id                 = azurerm_subnet.vnet2-subnet1.id
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
+
+##########################################################################################################################
 
 #Create Storage Account, Log Analytics Workspace and Flow Logging
 resource "azurerm_storage_account" "salazurite123" {
@@ -127,6 +138,8 @@ resource "azurerm_network_watcher_flow_log" "nsgflowlog" {
     interval_in_minutes   = 10
   }
 }
+
+##########################################################################################################################
 
 #Create VM1, in VNET1. Enable IIS Web Server.
 resource "random_password" "vm1-pw" {
@@ -192,7 +205,9 @@ resource "azurerm_virtual_machine_extension" "vm1-webserverinstall" {
   SETTINGS
 }
 
-#Create VM2, in VNET2. Enable IIS Web Server.
+##########################################################################################################################
+
+#Create VM2, in VNET1. Enable IIS Web Server.
 resource "random_password" "vm2-pw" {
   length      = 20
   min_lower   = 1
@@ -213,9 +228,9 @@ resource "azurerm_network_interface" "vm2-nic" {
   resource_group_name = azurerm_resource_group.rg.name
   ip_configuration {
     name                          = "vm2-nic-ipconfig"
-    subnet_id                     = azurerm_subnet.vnet2-subnet1.id
+    subnet_id                     = azurerm_subnet.vnet1-subnet1.id
     private_ip_address_allocation = "Static"
-    private_ip_address            = "10.2.1.5"
+    private_ip_address            = "10.1.1.6"
     public_ip_address_id          = azurerm_public_ip.vm2-public-ip.id
   }
 }
@@ -259,10 +274,6 @@ resource "azurerm_virtual_machine_extension" "vm2-webserverinstall" {
 ##########################################################################################################################
 
 # TO DO LIST:
-
-# Added random string for resource naming
-# Separated providers.tf
-# Created locals.tf to prepend resource names with region 
 
 ##########################################################################################################################
 
