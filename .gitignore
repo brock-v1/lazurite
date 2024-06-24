@@ -7,3 +7,6 @@ remote.conf
 .terraform
 versions-local.tf
 terraform.tfstate.backup
+
+#Ignore MacOS files
+.DS_Store

@@ -1,27 +1,16 @@
-
 ##########################################################################################################################
 
-#Create a random string for naming resources
-resource "random_string" "unique" {
-  length      = 3
-  min_numeric = 3
-  numeric     = true
-  special     = false
-  lower       = true
-  upper       = false
-}
+# Resource Group
 
-##########################################################################################################################
-
-#Create Resource Group
 resource "azurerm_resource_group" "rg" {
-  name     = "rg${local.location_short}${random_string.unique.result}"
+  name     = "rg"
   location = var.location
 }
 
 ##########################################################################################################################
 
-#Create 2 VNETs with Peering
+# 2 VNETs + Peering
+
 resource "azurerm_virtual_network" "vnet1" {
   name                = "vnet1"
   resource_group_name = azurerm_resource_group.rg.name
@@ -49,14 +38,18 @@ resource "azurerm_virtual_network_peering" "peer2to1" {
 
 ##########################################################################################################################
 
-#Create Network Watcher
+# Network Watcher
+
 resource "azurerm_network_watcher" "networkwatcher" {
-  name                = "networkwatcher_${local.location_short}${random_string.unique.result}"
+  name                = "networkwatcher"
   resource_group_name = azurerm_resource_group.rg.name
   location            = var.location
 }
 
-#Create 2 Subnets, 1 per VNET
+##########################################################################################################################
+
+# 2 Subnets, 1 per VNET
+
 resource "azurerm_subnet" "vnet1-subnet1" {
   name                 = "vnet1-subnet1"
   resource_group_name  = azurerm_resource_group.rg.name
@@ -72,7 +65,8 @@ resource "azurerm_subnet" "vnet2-subnet1" {
 
 ##########################################################################################################################
 
-#Create default NSG and associate it to both Subnets
+# NSG - VNET1 + VNET2
+
 resource "azurerm_network_security_group" "nsg" {
   name                = "nsg"
   resource_group_name = azurerm_resource_group.rg.name
@@ -102,7 +96,8 @@ resource "azurerm_subnet_network_security_group_association" "nsgtovnet2-subnet1
 
 ##########################################################################################################################
 
-#Create Storage Account, Log Analytics Workspace and Flow Logging
+# Storage Account + Log Analytics Workspace + Flow Logging
+
 resource "azurerm_storage_account" "salazurite123" {
   name                      = "salazurite123"
   resource_group_name       = azurerm_resource_group.rg.name
@@ -113,7 +108,7 @@ resource "azurerm_storage_account" "salazurite123" {
   enable_https_traffic_only = "true"
 }
 resource "azurerm_log_analytics_workspace" "law1" {
-  name                = "law-${local.location_short}${random_string.unique.result}"
+  name                = "law1"
   resource_group_name = azurerm_resource_group.rg.name
   location            = var.location
   sku                 = "PerGB2018"
@@ -141,7 +136,8 @@ resource "azurerm_network_watcher_flow_log" "nsgflowlog" {
 
 ##########################################################################################################################
 
-#Create VM1, in VNET1. Enable IIS Web Server.
+# VM1 - VNET1
+
 resource "random_password" "vm1-pw" {
   length      = 20
   min_lower   = 1
@@ -207,7 +203,8 @@ resource "azurerm_virtual_machine_extension" "vm1-webserverinstall" {
 
 ##########################################################################################################################
 
-#Create VM2, in VNET1. Enable IIS Web Server.
+# VM2 - VNET1
+
 resource "random_password" "vm2-pw" {
   length      = 20
   min_lower   = 1
@@ -273,13 +270,65 @@ resource "azurerm_virtual_machine_extension" "vm2-webserverinstall" {
 
 ##########################################################################################################################
 
-# TO DO LIST:
+# Load Balancer
+
+resource "azurerm_public_ip" "extlb-ip" {
+  name                = "extlb-ip"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+resource "azurerm_lb" "extlb" {
+  name                = "extlb"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  sku                 = "Standard"
+
+  frontend_ip_configuration {
+    name                 = azurerm_public_ip.extlb-ip.name
+    public_ip_address_id = azurerm_public_ip.extlb-ip.id
+  }
+}
+resource "azurerm_lb_backend_address_pool" "extlb-pool" {
+  loadbalancer_id = azurerm_lb.extlb.id
+  name            = "extlb-pool"
+}
+resource "azurerm_lb_probe" "extlb-probe80" {
+  loadbalancer_id = azurerm_lb.extlb.id
+  name            = "extlb-probe80"
+  port            = 80
+}
+resource "azurerm_lb_rule" "extlb-rule80" {
+  loadbalancer_id                = azurerm_lb.extlb.id
+  name                           = "extlb-rule80"
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  disable_outbound_snat          = true
+  frontend_ip_configuration_name = azurerm_public_ip.extlb-ip.name
+  probe_id                       = azurerm_lb_probe.extlb-probe80.id
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.extlb-pool.id]
+}
+resource "azurerm_lb_backend_address_pool_address" "vm1" {
+  name                    = "vm1"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.extlb-pool.id
+  virtual_network_id      = azurerm_virtual_network.vnet1.id
+  ip_address              = "10.1.1.5"
+}
+resource "azurerm_lb_backend_address_pool_address" "vm2" {
+  name                    = "vm2"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.extlb-pool.id
+  virtual_network_id      = azurerm_virtual_network.vnet1.id
+  ip_address              = "10.1.1.6"
+}
 
 ##########################################################################################################################
 
-#Add Bastion
-#Add Load Balancer
-#Add Private Endpoint
-#Add DNS
+# TO DO LIST:
+
+# Add Bastion
+# Add Private Endpoint
+# Add DNS
 
 ##########################################################################################################################
