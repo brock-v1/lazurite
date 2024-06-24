@@ -1,37 +1,32 @@
-#Define Providers
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "=3.0.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "3.6.2"
-    }
-  }
-}
-provider "azurerm" {
-  features {}
+
+
+#Create a random string for naming resources
+resource "random_string" "unique" {
+  length      = 3
+  min_numeric = 3
+  numeric     = true
+  special     = false
+  lower       = true
+  upper       = false
 }
 
 #Create Resource Group
 resource "azurerm_resource_group" "rg" {
-  name     = "rg"
-  location = var.resource_group_location
+  name     = "rg${local.location_short}${random_string.unique.result}"
+  location = var.location
 }
 
 #Create 2 VNETs with Peering
 resource "azurerm_virtual_network" "vnet1" {
   name                = "vnet1"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   address_space       = ["10.1.0.0/16"]
 }
 resource "azurerm_virtual_network" "vnet2" {
   name                = "vnet2"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   address_space       = ["10.2.0.0/16"]
 }
 resource "azurerm_virtual_network_peering" "peer1to2" {
@@ -48,10 +43,10 @@ resource "azurerm_virtual_network_peering" "peer2to1" {
 }
 
 #Create Network Watcher for East US
-resource "azurerm_network_watcher" "networkwatcher_eastus" {
-  name                = "networkwatcher_eastus"
+resource "azurerm_network_watcher" "networkwatcher" {
+  name                = "networkwatcher_${local.location_short}${random_string.unique.result}"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
 }
 
 #Create 2 Subnets, 1 per VNET
@@ -72,7 +67,7 @@ resource "azurerm_subnet" "vnet2-subnet1" {
 resource "azurerm_network_security_group" "nsg" {
   name                = "nsg"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
 }
 resource "azurerm_network_security_rule" "allowany80" {
   name                        = "allowany80"
@@ -100,21 +95,21 @@ resource "azurerm_subnet_network_security_group_association" "nsgtovnet2-subnet1
 resource "azurerm_storage_account" "salazurite123" {
   name                      = "salazurite123"
   resource_group_name       = azurerm_resource_group.rg.name
-  location                  = azurerm_resource_group.rg.location
+  location                  = var.location
   account_tier              = "Standard"
   account_kind              = "StorageV2"
   account_replication_type  = "LRS"
   enable_https_traffic_only = "true"
 }
 resource "azurerm_log_analytics_workspace" "law1" {
-  name                = "law1"
+  name                = "law-${local.location_short}${random_string.unique.result}"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   sku                 = "PerGB2018"
   retention_in_days   = 30
 }
 resource "azurerm_network_watcher_flow_log" "nsgflowlog" {
-  network_watcher_name      = azurerm_network_watcher.networkwatcher_eastus.name
+  network_watcher_name      = azurerm_network_watcher.networkwatcher.name
   resource_group_name       = azurerm_resource_group.rg.name
   name                      = "nsgflowlog"
   network_security_group_id = azurerm_network_security_group.nsg.id
@@ -127,7 +122,7 @@ resource "azurerm_network_watcher_flow_log" "nsgflowlog" {
   traffic_analytics {
     enabled               = true
     workspace_id          = azurerm_log_analytics_workspace.law1.workspace_id
-    workspace_region      = azurerm_log_analytics_workspace.law1.location
+    workspace_region      = var.location
     workspace_resource_id = azurerm_log_analytics_workspace.law1.id
     interval_in_minutes   = 10
   }
@@ -144,13 +139,13 @@ resource "random_password" "vm1-pw" {
 }
 resource "azurerm_public_ip" "vm1-public-ip" {
   name                = "vm1-public-ip"
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Static"
 }
 resource "azurerm_network_interface" "vm1-nic" {
   name                = "vm1-nic"
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
   ip_configuration {
     name                          = "vm1-nic-ipconfig"
@@ -163,7 +158,7 @@ resource "azurerm_network_interface" "vm1-nic" {
 resource "azurerm_windows_virtual_machine" "vm1" {
   name                = "vm1"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   size                = "Standard_DS1_v2"
   admin_username      = "lazurite"
   admin_password      = random_password.vm1-pw.result
@@ -208,13 +203,13 @@ resource "random_password" "vm2-pw" {
 }
 resource "azurerm_public_ip" "vm2-public-ip" {
   name                = "vm2-public-ip"
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Static"
 }
 resource "azurerm_network_interface" "vm2-nic" {
   name                = "vm2-nic"
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
   ip_configuration {
     name                          = "vm2-nic-ipconfig"
@@ -227,7 +222,7 @@ resource "azurerm_network_interface" "vm2-nic" {
 resource "azurerm_windows_virtual_machine" "vm2" {
   name                = "vm2"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   size                = "Standard_DS1_v2"
   admin_username      = "lazurite"
   admin_password      = random_password.vm2-pw.result
@@ -265,9 +260,11 @@ resource "azurerm_virtual_machine_extension" "vm2-webserverinstall" {
 
 # TO DO LIST:
 
-# Need to randomize resource names
+# Added random string for resource naming
+# Separated providers.tf
+# Created locals.tf to prepend resource names with region 
 
-# Need to fix Network Watcher name
+##########################################################################################################################
 
 #Add Bastion
 #Add Load Balancer
